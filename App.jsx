@@ -1,219 +1,145 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-import "bootstrap/dist/css/bootstrap.min.css";
+
+import { useEffect, useState } from "react";
 import "./App.css";
 
-const App = () => {
+const API = "http://localhost:5000/tasks";
+
+function App() {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [error, setError] = useState("");
 
-  // Fetch tasks
-  const fetchTasks = async () => {
+  async function loadTasks() {
     try {
-      const response = await axios.get(
-        "http://localhost:5000/tasks"
-      );
-
-      setTasks(response.data);
-      setError(null);
-    } catch (err) {
-      setError("Could not fetch tasks.");
-      console.error(err);
+      const response = await fetch(API);
+      if (!response.ok) throw new Error("Could not load tasks");
+      setTasks(await response.json());
+      setError("");
+    } catch {
+      setError("Cannot connect to the server. Check your backend.");
     }
-  };
+  }
 
   useEffect(() => {
-    fetchTasks();
+    loadTasks();
   }, []);
 
-  // Create a new task
-  const createTask = async () => {
-    if (!title.trim()) {
-      setError("Task title cannot be empty.");
-      return;
-    }
+  async function addTask(e) {
+    e.preventDefault();
+    if (!title.trim()) return;
 
     try {
-      const response = await axios.post(
-        "http://localhost:5000/tasks",
-        { title }
-      );
+      const response = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim() }),
+      });
 
-      setTasks([...tasks, response.data]);
+      if (!response.ok) throw new Error("Could not add task");
+
+      const newTask = await response.json();
+      setTasks((prev) => [...prev, newTask]);
       setTitle("");
-      setError(null);
-      setSuccess("Task created successfully!");
-
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError("Could not create task.");
-      console.error(err);
+      setError("");
+    } catch {
+      setError("Failed to add task. Check your backend.");
     }
-  };
+  }
 
-  // Update task status
-  const updateTaskStatus = async (id, newStatus) => {
+  async function updateStatus(id, status) {
     try {
-      const response = await axios.patch(
-        `http://localhost:5000/tasks/${id}`,
-        { status: newStatus }
-      );
+      const response = await fetch(`${API}/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
 
-      setTasks(
-        tasks.map((task) =>
-          task._id === id ? response.data : task
-        )
-      );
+      if (!response.ok) throw new Error("Update failed");
 
-      setSuccess("Task status updated successfully!");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError("Could not update task status.");
-      console.error(err);
+      const updatedTask = await response.json();
+      setTasks((prev) =>
+        prev.map((task) => task._id === id ? updatedTask : task)
+      );
+    } catch {
+      setError("Failed to update task status.");
     }
-  };
+  }
 
-  // Delete a task
-  const deleteTask = async (id) => {
+  async function deleteTask(id) {
     try {
-      await axios.delete(
-        `http://localhost:5000/tasks/${id}`
-      );
+      const response = await fetch(`${API}/${id}`, {
+        method: "DELETE",
+      });
 
-      setTasks(
-        tasks.filter((task) => task._id !== id)
-      );
+      if (!response.ok) throw new Error("Delete failed");
 
-      setSuccess("Task deleted successfully!");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError("Could not delete task.");
-      console.error(err);
+      setTasks((prev) => prev.filter((task) => task._id !== id));
+      setError("");
+    } catch {
+      setError("Failed to delete task.");
     }
-  };
+  }
 
   return (
-    <div className="container mt-5">
-      <h1 className="text-center">Task Manager</h1>
+    <main className="app">
+      <header>
+        <h1>Task Manager</h1>
+        <p>Organize your work, one task at a time.</p>
+      </header>
 
-      {error && (
-        <div className="alert alert-danger">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="alert alert-success">
-          {success}
-        </div>
-      )}
-
-      <div className="input-group mb-3">
+      <form className="task-form" onSubmit={addTask}>
         <input
           type="text"
-          className="form-control"
+          placeholder="Enter a new task..."
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Enter task title"
         />
+        <button type="submit">Add Task</button>
+      </form>
 
-        <button
-          className="btn btn-primary"
-          onClick={createTask}
-        >
-          Add Task
-        </button>
-      </div>
+      {error && <p className="error">{error}</p>}
 
-      <div className="row">
-        {["Pending", "Ongoing", "Completed"].map(
-          (status) => (
-            <div className="col-md-4" key={status}>
-              <div className="card mb-4">
-                <div className="card-header">
-                  <h5>{status} Tasks</h5>
-                </div>
+      <h2>My Tasks ({tasks.length})</h2>
 
-                <div className="card-body">
-                  {tasks
-                    .filter(
-                      (task) => task.status === status
-                    )
-                    .map((task) => (
-                      <TaskCard
-                        key={task._id}
-                        task={task}
-                        onUpdateStatus={updateTaskStatus}
-                        onDelete={deleteTask}
-                      />
-                    ))}
-
-                  {tasks.filter(
-                    (task) => task.status === status
-                  ).length === 0 && (
-                    <p className="text-muted">
-                      No tasks in this category.
-                    </p>
-                  )}
-                </div>
+      {tasks.length === 0 ? (
+        <p className="empty">No tasks yet. Add your first task!</p>
+      ) : (
+        <div className="task-list">
+          {tasks.map((task) => (
+            <article className="task" key={task._id}>
+              <div className="task-info">
+                <strong>{task.title}</strong>
+                <span className={`status ${task.status.toLowerCase()}`}>
+                  {task.status}
+                </span>
               </div>
-            </div>
-          )
-        )}
-      </div>
-    </div>
-  );
-};
 
-const TaskCard = ({
-  task,
-  onUpdateStatus,
-  onDelete
-}) => {
-  return (
-    <div className="card mb-2">
-      <div className="card-body">
-        <h6 className="card-title">{task.title}</h6>
+              <div className="actions">
+                <select
+                  aria-label={`Status for ${task.title}`}
+                  value={task.status}
+                  onChange={(e) =>
+                    updateStatus(task._id, e.target.value)
+                  }
+                >
+                  <option>Pending</option>
+                  <option>Ongoing</option>
+                  <option>Completed</option>
+                </select>
 
-        <p className="card-text">
-          Status: {task.status}
-        </p>
-
-        <div className="btn-group" role="group">
-          {task.status !== "Ongoing" && (
-            <button
-              className="btn btn-info"
-              onClick={() =>
-                onUpdateStatus(task._id, "Ongoing")
-              }
-            >
-              Mark as Ongoing
-            </button>
-          )}
-
-          {task.status !== "Completed" && (
-            <button
-              className="btn btn-success"
-              onClick={() =>
-                onUpdateStatus(task._id, "Completed")
-              }
-            >
-              Mark as Completed
-            </button>
-          )}
-
-          <button
-            className="btn btn-danger"
-            onClick={() => onDelete(task._id)}
-          >
-            Delete Task
-          </button>
+                <button
+                  className="delete"
+                  onClick={() => deleteTask(task._id)}
+                >
+                  Delete
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
-      </div>
-    </div>
+      )}
+    </main>
   );
-};
+}
 
 export default App;
