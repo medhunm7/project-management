@@ -1,22 +1,28 @@
-
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API = "http://localhost:5000/tasks";
+const BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/+$/, "");
+const API = `${BASE_URL}/tasks`;
 
 function App() {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   async function loadTasks() {
     try {
+      setLoading(true);
       const response = await fetch(API);
       if (!response.ok) throw new Error("Could not load tasks");
-      setTasks(await response.json());
+      const data = await response.json();
+      setTasks(data);
       setError("");
-    } catch {
+    } catch (err) {
+      console.error(err);
       setError("Cannot connect to the server. Check your backend.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -58,7 +64,7 @@ function App() {
 
       const updatedTask = await response.json();
       setTasks((prev) =>
-        prev.map((task) => task._id === id ? updatedTask : task)
+        prev.map((task) => (task._id === id ? updatedTask : task))
       );
     } catch {
       setError("Failed to update task status.");
@@ -101,7 +107,9 @@ function App() {
 
       <h2>My Tasks ({tasks.length})</h2>
 
-      {tasks.length === 0 ? (
+      {loading ? (
+        <p className="loading">Loading tasks...</p>
+      ) : tasks.length === 0 ? (
         <p className="empty">No tasks yet. Add your first task!</p>
       ) : (
         <div className="task-list">
@@ -118,9 +126,7 @@ function App() {
                 <select
                   aria-label={`Status for ${task.title}`}
                   value={task.status}
-                  onChange={(e) =>
-                    updateStatus(task._id, e.target.value)
-                  }
+                  onChange={(e) => updateStatus(task._id, e.target.value)}
                 >
                   <option>Pending</option>
                   <option>Ongoing</option>
